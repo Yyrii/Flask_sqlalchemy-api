@@ -1,13 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-import json
-import request
+from json import JSONEncoder
+from flask_marshmallow import Marshmallow
+import requests, json
+
 
 app = Flask(__name__)
-
-@app.route('/', methods=['GET'])
-def get():
-    return jsonify({'msg' : 'Hello World!'})
 
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Phone_book.sqlite'
@@ -29,7 +27,16 @@ class PhoneBook(db.Model):
         self.number = number
 
 
+ma = Marshmallow(app)
+class DecoderSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "operator", "number")
 
+pb_one_record_schema = DecoderSchema()
+pb_records_schema = DecoderSchema(many=True)
+
+
+# ADD ELEMENT
 @app.route('/PhoneBook',methods=['POST'])
 def add_record():
     id = request.json['id']
@@ -42,17 +49,55 @@ def add_record():
     db.session.add(new_record)
     db.session.commit()
 
-    return jsonify({"id" : "{}".format(new_record.id),
-                    "name": "{}".format(new_record.name),
-                    "operator": "{}".format(new_record.operator),
-                    "number": "{}".format(new_record.number)})
+    return pb_one_record_schema.jsonify(new_record)
 
 
+
+# GET ALL ELEMENTS
 @app.route('/PhoneBook', methods=['GET'])
-def get_record():
-    data = PhoneBook.query.all()
-    r = request.get(data)
-    return jsonify(r)
+def get_all_records():
+    all_records = pb_records_schema.dump( PhoneBook.query.all() )
+    return jsonify(all_records)
+
+
+# GET SPECIFIC RECORD
+@app.route('/PhoneBook/<id>', methods=['GET'])
+def get_record(id):
+    record_of_intrest = pb_one_record_schema.dump( PhoneBook.query.get(id) )
+    return jsonify(record_of_intrest)
+
+
+# UPDATE RECORD
+@app.route('/PhoneBook/<id>', methods=['PUT'])
+def update_record(id):
+    record_of_intrest = PhoneBook.query.get(id)
+
+    record_of_intrest.id = request.json['id']
+    record_of_intrest.name = request.json['name']
+    record_of_intrest.operator = request.json['operator']
+    record_of_intrest.number = request.json['number']
+
+    db.session.commit()
+
+    return pb_one_record_schema.jsonify(record_of_intrest)
+
+
+# DELETE RECORD
+@app.route('/PhoneBook/<id>', methods=['DELETE'])
+def delete_record(id):
+    record_of_intrest = PhoneBook.query.get(id)
+
+    db.session.delete(record_of_intrest)
+    db.session.commit()
+
+    return pb_records_schema.jsonify(record_of_intrest)
+
+
+def post_record(data):
+    url = "localhost:5000/PhoneBook/"
+    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+    r = requests.post(url, data=json.dumps(data), headers=headers)
+
 
 if __name__ == '__main__':
     app.run()
