@@ -3,15 +3,61 @@ from flask_sqlalchemy import SQLAlchemy
 from json import JSONEncoder
 from flask_marshmallow import Marshmallow
 import requests, json
+from sqlalchemy.orm import scoped_session, sessionmaker
 
 
 app = Flask(__name__)
 
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Phone_book.sqlite'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///phone_book.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app=app)
+
+# ---------------------------------------------
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String
+
+engine = create_engine('sqlite:///phone_book.sqlite', convert_unicode=True)
+db_session = scoped_session(sessionmaker(autocommit=False,
+                                         autoflush=False,
+                                         bind=engine))
+
+Base = declarative_base()
+Base.query = db_session.query_property()
+
+
+class PhoneBook2(Base):
+    __tablename__ = 'PhoneBook'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(32))
+    operator = Column(String(16))
+    number = Column(String(11))
+
+    def __init__(self, id, name, operator, number):
+        self.id = id
+        self.name = name
+        self.operator = operator
+        self.number = number
+
+def init_db2():
+    Base.metadata.create_all(bind=engine)
+
+
+#----------------------------------------------
+
+
+
+
+
+def init_db():
+    db.create_all()
+
+def add_elements():
+    db_session.add(PhoneBook2('4', 'Karolina', 'Play', '111222333'))
+    db_session.commit()
 
 
 class PhoneBook(db.Model):
@@ -52,6 +98,23 @@ def add_record():
     return pb_one_record_schema.jsonify(new_record)
 
 
+# ADD MULTIPLE ELEMENTS
+@app.route('/PhoneBook',methods=['POST'])
+def add_multiple():
+    id = "10"
+    name = "ewfwe"
+    operator = "rg"
+    number = "eee"
+
+    new_record = PhoneBook(id, name, operator, number)
+
+    db.session.add(new_record)
+    db.session.commit()
+
+    return jsonify({"id" : "{}".format(id),
+                    "name" : "{}".format(name),
+                    "operator":"{}".format(operator),
+                    "number":"{}".format(number)})
 
 # GET ALL ELEMENTS
 @app.route('/PhoneBook', methods=['GET'])
@@ -92,11 +155,6 @@ def delete_record(id):
 
     return pb_records_schema.jsonify(record_of_intrest)
 
-
-def post_record(data):
-    url = "localhost:5000/PhoneBook/"
-    headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
-    r = requests.post(url, data=json.dumps(data), headers=headers)
 
 
 if __name__ == '__main__':
